@@ -23,3 +23,21 @@ void GpioPin_setup_interrupt(
     err = gpio_add_callback(pin->port, settings);
     ERROR_OCCURRED(err);
 }
+
+
+void GpioPin_setup_as_output(const struct GpioPin * pin)
+{
+	int err = gpio_pin_configure(pin->port, pin->pin, GPIO_OUTPUT);
+    ERROR_OCCURRED(err);
+}
+
+void GpioPin_set_output_state(const struct GpioPin * pin, bool enabled)
+{
+    if (pin->active_low)
+    {
+        enabled = !enabled;
+    }
+    
+	int err = gpio_pin_set(pin->port, pin->pin, (enabled) ? 1 : 0);
+    ERROR_OCCURRED(err);
+}

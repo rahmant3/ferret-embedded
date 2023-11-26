@@ -16,7 +16,7 @@
 #include <zephyr/drivers/gpio.h>
 
 #include "RotaryEncoder.h"
-#include "PwmOutput.h"
+#include "FanController.h"
 
 static struct RotaryEncoder encoder_1;
 static GpioInterruptSettings encoder_1_interrupt_settings;
@@ -24,7 +24,7 @@ static GpioInterruptSettings encoder_1_interrupt_settings;
 static struct RotaryEncoder encoder_2;
 static GpioInterruptSettings encoder_2_interrupt_settings;
 
-static struct PwmOutput fan_output;
+static struct FanController fan;
 
 static void encoder_1_interrupt(
 	const struct device *port,
@@ -73,98 +73,34 @@ int main(void)
 	GpioPin_setup_interrupt(&encoder_2.inputA, false, &encoder_2_interrupt_settings, encoder_2_interrupt);
 
     // Configure PWM output on PWM0, Channel 0 (by default P1.06)
-	fan_output.timer = device_get_binding("pwm@21000");
-	fan_output.channel = 0;
-	fan_output.polarity = PWM_POLARITY_NORMAL;
+	fan.output.timer = device_get_binding("pwm@21000");
+	fan.output.channel = 0;
+	fan.output.polarity = PWM_POLARITY_NORMAL;
 
-	PwmOutput_set_freq_and_duty_cycle(&fan_output, 25000, 100);
-	
-	while (1) {
+	fan.power_enable.port = device_get_binding("gpio@842800"); //gpio1
+	fan.power_enable.pin = 5;
+	fan.power_enable.active_low = false; //true;
 
-		k_sleep(K_SECONDS(4U));
-	}
+	GpioPin_setup_as_output(&fan.power_enable);
+
+	FanController_init(&fan);
 	
-	#if 0
-	const struct device * dev = device_get_binding("gpio@842800");
-	if (dev == NULL)
+	while (1) 
 	{
-		printk("Could not get device.");
-	}
+		enum EncoderState encoder_1_state = RotaryEncoder_poll_state(&encoder_1);
+		if (encoder_1_state == EncoderState_Increased)
+		{
+			FanController_increase_speed(&fan);
+		}
+		else if (encoder_1_state == EncoderState_Decreased)
+		{
+			FanController_decrease_speed(&fan);
+		}
+		else
+		{
+			// No change.
+		}
 
-	// configure the LED pin as output
-	gpio_pin_configure(dev, 10, GPIO_OUTPUT);
-	gpio_pin_set(dev, 10, 1);
-	while (1) {
-
-		k_sleep(K_SECONDS(4U));
+		k_sleep(K_MSEC(500));
 	}
-	#endif
-	return 0;
 }
-
-#if 0
-static const struct pwm_dt_spec pwm_led0 = PWM_DT_SPEC_GET(DT_ALIAS(pwm_led0));
-
-#define MIN_PERIOD PWM_SEC(1U) / 128U
-#define MAX_PERIOD PWM_SEC(1U)
-
-int main(void)
-{
-	uint32_t max_period;
-	uint32_t period;
-	uint8_t dir = 0U;
-	int ret;
-
-	printk("PWM-based blinky\n");
-
-	if (!device_is_ready(pwm_led0.dev)) {
-		printk("Error: PWM device %s is not ready\n",
-		       pwm_led0.dev->name);
-		return 0;
-	}
-
-	/*
-	 * In case the default MAX_PERIOD value cannot be set for
-	 * some PWM hardware, decrease its value until it can.
-	 *
-	 * Keep its value at least MIN_PERIOD * 4 to make sure
-	 * the sample changes frequency at least once.
-	 */
-	printk("Calibrating for channel %d...\n", pwm_led0.channel);
-	max_period = MAX_PERIOD;
-	while (pwm_set_dt(&pwm_led0, max_period, max_period / 2U)) {
-		max_period /= 2U;
-		if (max_period < (4U * MIN_PERIOD)) {
-			printk("Error: PWM device "
-			       "does not support a period at least %lu\n",
-			       4U * MIN_PERIOD);
-			return 0;
-		}
-	}
-
-	printk("Done calibrating; maximum/minimum periods %u/%lu nsec\n",
-	       max_period, MIN_PERIOD);
-
-	period = max_period;
-	while (1) {
-		ret = pwm_set_dt(&pwm_led0, period, period / 2U);
-		if (ret) {
-			printk("Error %d: failed to set pulse width\n", ret);
-			return 0;
-		}
-
-		period = dir ? (period * 2U) : (period / 2U);
-		if (period > max_period) {
-			period = max_period / 2U;
-			dir = 0U;
-		} else if (period < MIN_PERIOD) {
-			period = MIN_PERIOD * 2U;
-			dir = 1U;
-		}
-
-		k_sleep(K_SECONDS(4U));
-	}
-	return 0;
-}
-
-#endif
