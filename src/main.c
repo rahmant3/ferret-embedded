@@ -16,9 +16,15 @@
 #include <zephyr/drivers/gpio.h>
 
 #include "RotaryEncoder.h"
+#include "PwmOutput.h"
 
 static struct RotaryEncoder encoder_1;
 static GpioInterruptSettings encoder_1_interrupt_settings;
+
+static struct RotaryEncoder encoder_2;
+static GpioInterruptSettings encoder_2_interrupt_settings;
+
+static struct PwmOutput fan_output;
 
 static void encoder_1_interrupt(
 	const struct device *port,
@@ -31,20 +37,48 @@ static void encoder_1_interrupt(
 	}
 }
 
+static void encoder_2_interrupt(
+	const struct device *port,
+	struct gpio_callback *cb,
+	gpio_port_pins_t pins)
+{
+	if ((pins & BIT(12)) != 0)
+	{
+		RotaryEncoder_inputA_falling_event(&encoder_2);
+	}
+}
 
 int main(void)
 {
 	printk("Rotary Encoder Test\n");
-	encoder_1.inputA.port = device_get_binding("gpio@842800");
+	encoder_1.inputA.port = device_get_binding("gpio@842800"); //gpio1
 	encoder_1.inputA.pin = 10;
 
-	encoder_1.inputB.port = device_get_binding("gpio@842800");
+	encoder_1.inputB.port = device_get_binding("gpio@842800"); //gpio1
 	encoder_1.inputB.pin = 11;
 
 	GpioPin_setup_as_input(&encoder_1.inputA);
 	GpioPin_setup_as_input(&encoder_1.inputB);
 	GpioPin_setup_interrupt(&encoder_1.inputA, false, &encoder_1_interrupt_settings, encoder_1_interrupt);
+	
+	
+	encoder_2.inputA.port = device_get_binding("gpio@842800"); //gpio1
+	encoder_2.inputA.pin = 12;
 
+	encoder_2.inputB.port = device_get_binding("gpio@842800"); //gpio1
+	encoder_2.inputB.pin = 13;
+
+	GpioPin_setup_as_input(&encoder_2.inputA);
+	GpioPin_setup_as_input(&encoder_2.inputB);
+	GpioPin_setup_interrupt(&encoder_2.inputA, false, &encoder_2_interrupt_settings, encoder_2_interrupt);
+
+    // Configure PWM output on PWM0, Channel 0 (by default P1.06)
+	fan_output.timer = device_get_binding("pwm@21000");
+	fan_output.channel = 0;
+	fan_output.polarity = PWM_POLARITY_NORMAL;
+
+	PwmOutput_set_freq_and_duty_cycle(&fan_output, 25000, 100);
+	
 	while (1) {
 
 		k_sleep(K_SECONDS(4U));
