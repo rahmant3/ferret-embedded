@@ -4,4 +4,9 @@ cmake_minimum_required(VERSION 3.20.0)
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(blinky_pwm)
 
-target_sources(app PRIVATE src/main.c src/GpioPin.c src/RotaryEncoder.c src/PwmOutput.c src/FanController.c)
+# https://devzone.nordicsemi.com/f/nordic-q-a/77780/disable-optimization-of-part-of-the-code-through-cmake
+add_library(set-app-flags INTERFACE)
+target_compile_options(set-app-flags INTERFACE -O0)
+target_link_libraries(app PRIVATE set-app-flags)
+
+target_sources(app PRIVATE src/main.c src/GpioPin.c src/RotaryEncoder.c src/PwmOutput.c src/FanController.c src/MistController.c)
